@@ -144,6 +144,7 @@ What we could not find elsewhere, and the reason this exists, is the layer on to
 - **Battle-tested narrowly.** Developed against one machine's real data (a few hundred MB, Windows, Japanese-and-English content) plus the synthetic suite. Linux/macOS are exercised by CI on the synthetic suite only.
 - **The lineage marker is the Japanese word `系譜:`.** It is a load-bearing keyword of the format, not decoration. We kept it because renaming it would fork the format away from the data it was grown on.
 - **`suggest` proposes, never decides.** Auto-linking notes by lexical similarity is how a knowledge graph rots. The tool stops at candidates on purpose.
+- **Auto-promoted memory is an injection surface.** If you wire `resonate` into a hook so memory lines surface into an agent's context automatically, any text that reaches your `memory/` notes (pasted web content, quoted external text) can later be promoted into context without review. Our own mitigation is narrow: only the hand-written one-line `description` is ever surfaced, and notes are written by the agent's main loop only. If you imitate this design, audit what can reach the surfaced text. Treat the promotion path with the same suspicion as any prompt-injection channel.
 
 ## Why "blue-strawberry"?
 
