@@ -1,0 +1,4 @@
+{"type":"user","timestamp":"2026-01-10T09:00:00.000Z","message":{"role":"user","content":"How do I set up the demo project?"}}
+{"type":"assistant","timestamp":"2026-01-10T09:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Create a folder called dashboard-project and add a config file to get started."}]}}
+{"type":"user","timestamp":"2026-01-10T09:01:00.000Z","message":{"role":"user","content":"Can you show me a search example?"}}
+{"type":"assistant","timestamp":"2026-01-10T09:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Try searching for 'dashboard' across your sessions using recall search."}]}}

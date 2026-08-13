@@ -1,0 +1,6 @@
+{"type":"user","timestamp":"2026-01-15T09:00:00.000Z","message":{"role":"user","content":"Let's continue building the notification feature."}}
+{"type":"assistant","timestamp":"2026-01-15T09:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Sure, I'll add a notification handler now."}]}}
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-15T09:05:00.000Z","compactMetadata":{"trigger":"manual","preTokens":8000,"postTokens":900}}
+{"type":"user","isCompactSummary":true,"timestamp":"2026-01-15T09:05:01.000Z","message":{"role":"user","content":"This session is being continued from a previous conversation..."}}
+{"type":"user","timestamp":"2026-01-15T09:06:00.000Z","message":{"role":"user","content":"Now let's review the notification tests."}}
+{"type":"assistant","timestamp":"2026-01-15T09:06:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Reviewed -- tests pass for the notification feature."}]}}
