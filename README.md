@@ -2,7 +2,7 @@
 
 A single-file, stdlib-only Python CLI for searching and indexing [Claude Code](https://claude.com/claude-code) session transcripts (JSONL), plus an optional companion "memory graph" of Markdown notes with a guardian for its own consistency.
 
-Claude Code persists every conversation to `~/.claude/projects/<project>/<session-id>.jsonl` and never deletes it — even after context compaction drops old turns from the live window, they're still on disk. `recall.py` is how an agent (or you) gets back to that history: full-text search across every session, time-anchored playback, and a lightweight graph layer for notes that cite *when* and *where* an idea came from.
+Claude Code persists every conversation to `~/.claude/projects/<project>/<session-id>.jsonl` — even after context compaction drops old turns from the live window, they're still on disk. One important caveat: by default Claude Code prunes session files older than 30 days at startup (`cleanupPeriodDays` in `settings.json`). If you want a long-term archive — and this tool is far more useful with one — raise that setting first. `recall.py` is how an agent (or you) gets back to that history: full-text search across every session, time-anchored playback, and a lightweight graph layer for notes that cite *when* and *where* an idea came from.
 
 It is one file (`recall.py`), it imports nothing outside the standard library, and it is meant to be read, not just run.
 
@@ -140,6 +140,7 @@ What we could not find elsewhere, and the reason this exists, is the layer on to
 
 ## Honest limits
 
+- **Transcript retention is a setting, not a guarantee.** `cleanupPeriodDays` defaults to 30 days; anchors and search reach only as far back as your retention. We found this out during pre-publication review, after two weeks of happily assuming permanence.
 - **The JSONL format is not a public API.** Claude Code doesn't document its transcript format; this tool matches observed structure (including a raw-byte match for compaction events). A Claude Code update can break it. Tests use synthetic fixtures that mirror the observed serialization, so breakage should show up as test failures rather than silent wrong answers, but only for the shapes we knew to encode.
 - **Battle-tested narrowly.** Developed against one machine's real data (a few hundred MB, Windows, Japanese-and-English content) plus the synthetic suite. Linux/macOS are exercised by CI on the synthetic suite only.
 - **The lineage marker is the Japanese word `系譜:`.** It is a load-bearing keyword of the format, not decoration. We kept it because renaming it would fork the format away from the data it was grown on.
@@ -155,7 +156,7 @@ From the conversation that named it:
 
 The second line is false, and the way it is false matters. The verification was aimed at the wrong proposition. Whether blue strawberries exist in nature was never the question. The question was whether the nodes already at hand (the shape of a strawberry, the color blue, the ability to draw) could be bundled into something that didn't exist yet. They could. It took twenty seconds, and the result was better looking than the red ones.
 
-This tool is the same move. Claude Code already keeps every transcript. Markdown notes with wikilinks already existed. Full-text search is old. Nothing here required a new capability; it required noticing that "an agent that remembers across sessions, and can prove where each of its beliefs came from" was a bundle of parts already lying around.
+This tool is the same move. Claude Code already keeps every transcript (within its retention window). Markdown notes with wikilinks already existed. Full-text search is old. Nothing here required a new capability; it required noticing that "an agent that remembers across sessions, and can prove where each of its beliefs came from" was a bundle of parts already lying around.
 
 The name is a standing reminder to the agent that uses it: verify facts, but never let verification of the wrong proposition kill a bundle that would work.
 
