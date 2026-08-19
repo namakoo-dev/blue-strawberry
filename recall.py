@@ -20,7 +20,9 @@
 全サブコマンドの前に置ける共通の上書き引数: --projects-dir / --memory-dir
 (優先順位: CLI 引数 > 環境変数 RECALL_PROJECTS_DIR / RECALL_MEMORY_DIR > 自動検出。
 projects-dir の既定値は ~/.claude/projects、その直下のプロジェクトディレクトリが
-ちょうど1つならそれを自動採用する (0個/複数個なら一覧を出して要指定)。memory-dir の
+ちょうど1つならそれを自動採用する (0個/複数個なら一覧を出して要指定)。--projects-dir
+には親 (プロジェクト群) だけでなく単一プロジェクトの dir を直接渡してもよい (直下に
+*.jsonl があればそれ自体を1プロジェクトとして扱う)。memory-dir の
 既定値は projects-dir 直下で memory/ サブディレクトリを持つプロジェクトがちょうど1つ
 ならそこの memory/ を自動採用する (0個/複数個なら memory 層は未設定として扱う)。
 
@@ -187,8 +189,22 @@ def safe_json_loads(line):
 
 
 def iter_sessions(project_filter=None):
-    """PROJECTS_DIR/<project>/*.jsonl を Path で yield する (トップレベルのみ、非再帰)。"""
+    """PROJECTS_DIR/<project>/*.jsonl を Path で yield する (トップレベルのみ、非再帰)。
+
+    ★ PROJECTS_DIR 直下に *.jsonl が直に転がっている場合は、PROJECTS_DIR 自身を
+    1 プロジェクトとして扱う。--projects-dir に (親ではなく) 単一プロジェクトの dir を
+    直接渡された救済 -- 複数プロジェクト検出時のエラーメッセージが例示する使い方
+    (`--projects-dir "<個別プロジェクトdir>"`) がそのまま動くようにするため。
+    通常の「PROJECTS_DIR は親、直下の各 dir がプロジェクト」という動作は変えない
+    (直下に *.jsonl が無ければ今まで通りサブディレクトリを走査する)。"""
     if not PROJECTS_DIR.exists():
+        return
+    direct = sorted(PROJECTS_DIR.glob("*.jsonl"))
+    if direct:
+        if project_filter and project_filter.lower() not in PROJECTS_DIR.name.lower():
+            return
+        for p in direct:
+            yield p
         return
     for proj_dir in sorted(PROJECTS_DIR.iterdir()):
         if not proj_dir.is_dir():
@@ -197,6 +213,18 @@ def iter_sessions(project_filter=None):
             continue
         for p in sorted(proj_dir.glob("*.jsonl")):
             yield p
+
+
+def warn_if_no_sessions_anywhere():
+    """iter_sessions(None) (フィルタ無し) が 1 件も無い時だけ、探した場所を明示して stderr に
+    WARN する。呼び出し側の絞り込み結果が 0 件なのとは区別する ── フィルタ一致ゼロは正常
+    (そのプロジェクトが無いだけ) だが、フィルタ前から 0 件は --projects-dir の指す場所が
+    そもそも違う (親と子を取り違えた等) 事故の典型で、黙って通すと番人が空データを
+    「セッションが存在しない」と誤報し続ける (実測: dead=46)。"""
+    if next(iter_sessions(None), None) is None:
+        sys.stderr.write(f"WARN セッションが 1 件も見つからない (探索場所: {PROJECTS_DIR})\n")
+        return True
+    return False
 
 
 def resolve_session(prefix):
@@ -291,6 +319,7 @@ def count_compact_events(path):
 
 
 def cmd_list(args):
+    warn_if_no_sessions_anywhere()
     sessions = sorted(iter_sessions(args.project), key=lambda p: p.stat().st_mtime, reverse=True)
     if not sessions:
         print("該当セッションなし")
@@ -358,6 +387,7 @@ def cmd_search(args):
     qlow = query.lower()
     qbytes_low = query.encode("utf-8").lower()
 
+    warn_if_no_sessions_anywhere()
     sessions = list(iter_sessions(args.project))
     if args.days:
         cutoff = time.time() - args.days * 86400
@@ -512,6 +542,7 @@ def render_session_at(path, anchor_dt, window_minutes):
 def cmd_show(args):
     path = resolve_session(args.session_prefix)
     if path is None:
+        warn_if_no_sessions_anywhere()
         sys.stderr.write(f"セッションが見つからない: {args.session_prefix}\n")
         sys.exit(1)
     at = getattr(args, "at", None)
@@ -853,9 +884,18 @@ def check_anchor_staleness():
                1 つも無い (ERROR 相当、fork でファイルが変わった可能性)。hint は None のことも
                ある。"""
     sessions = list(iter_sessions(None))
+    anchors = list(iter_memory_anchors())
+    if not sessions and anchors:
+        # セッションが 1 件も見つからないと、以下のループは anchors 全件を無条件で
+        # missing (WARN dead link) に落とす -- 実体が本当に消えたのではなく、
+        # --projects-dir の指す場所を親子で取り違えただけの可能性が高い。番人が
+        # 「記憶が腐っている」と誤報するのを防ぐため、原因の見分け方を先に警告しておく。
+        sys.stderr.write(f"WARN セッションが 1 件も見つからない (探索場所: {PROJECTS_DIR})。"
+                          f"以下の系譜アンカー {len(anchors)} 件はこのせいで全て dead 判定に"
+                          f"なっている可能性がある\n")
     cache = _load_anchor_cache()
     missing, stale = [], []
-    for src, prefix, ts_str in iter_memory_anchors():
+    for src, prefix, ts_str in anchors:
         anchor_str = f"{prefix}@{ts_str}"
         prefix_low = prefix.lower()
         matches = [sp for sp in sessions if sp.stem.lower().startswith(prefix_low)]

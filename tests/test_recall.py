@@ -109,6 +109,45 @@ def test_iter_sessions_project_filter(fake_projects):
     assert none_match == []
 
 
+# ---------- iter_sessions: 単一プロジェクト dir を直接渡された時の救済 ----------
+# 実測の事故: 複数プロジェクト検出時のエラーメッセージは単一プロジェクト dir を例示するが
+# (`--projects-dir "<個別プロジェクトdir>"`)、iter_sessions は従来 PROJECTS_DIR を「親」
+# としてしか見なかったため、言われた通りに渡すとセッション0件で黙って通っていた。
+
+def test_iter_sessions_single_project_dir_direct(tmp_path, monkeypatch):
+    """PROJECTS_DIR 直下に *.jsonl が直接あれば、その dir 自身を1プロジェクトとして扱う。"""
+    (tmp_path / "abcd1234-0000-0000-0000-000000000000.jsonl").write_text(
+        _line({"type": "user", "timestamp": "2026-01-01T00:00:00.000Z",
+               "message": {"role": "user", "content": "hi"}}),
+        encoding="utf-8")
+    monkeypatch.setattr(recall, "PROJECTS_DIR", tmp_path)
+    sessions = list(recall.iter_sessions(None))
+    assert len(sessions) == 1
+    assert sessions[0].name == "abcd1234-0000-0000-0000-000000000000.jsonl"
+
+
+def test_iter_sessions_single_project_dir_filter_matches_own_name(tmp_path, monkeypatch):
+    """単一プロジェクト dir を渡した場合の --project フィルタは、その dir 自身の名前に
+    対して部分一致する。"""
+    proj = tmp_path / "C--Dev-ailine"
+    proj.mkdir()
+    (proj / "abcd1234-0000-0000-0000-000000000000.jsonl").write_text(
+        _line({"type": "user", "timestamp": "2026-01-01T00:00:00.000Z",
+               "message": {"role": "user", "content": "hi"}}), encoding="utf-8")
+    monkeypatch.setattr(recall, "PROJECTS_DIR", proj)
+    assert len(list(recall.iter_sessions(None))) == 1
+    assert len(list(recall.iter_sessions("ailine"))) == 1
+    assert list(recall.iter_sessions("nomatch")) == []
+
+
+def test_iter_sessions_parent_layout_unaffected(fake_projects):
+    """既存の「親 dir を渡す」レイアウト (PROJECTS_DIR/<project>/*.jsonl) は今回の変更で
+    崩れない -- PROJECTS_DIR 直下には *.jsonl が無いのでサブディレクトリ探索に落ちる。"""
+    direct = list(fake_projects.glob("*.jsonl"))
+    assert direct == []  # 前提: このフィクスチャは親レイアウトである
+    assert len(list(recall.iter_sessions(None))) == 1
+
+
 def test_get_start_info(fake_projects):
     path = next(recall.iter_sessions(None))
     start_ts, first_user = recall.get_start_info(path)
@@ -214,6 +253,49 @@ def test_resolve_session_ambiguous(tmp_path, monkeypatch, capsys):
     assert result is None  # 複数マッチは None (曖昧)
     result_unique = recall.resolve_session("aaaa1111")
     assert result_unique is not None
+
+
+# ---------- 0 件時の警告 (探索場所を明示。実測の「dead=46 誤報」事故の再発防止) ----------
+
+def test_cmd_list_warns_when_archive_has_no_sessions(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(recall, "PROJECTS_DIR", tmp_path)
+    args = argparse.Namespace(project=None)
+    recall.cmd_list(args)
+    captured = capsys.readouterr()
+    assert "該当セッションなし" in captured.out
+    assert "セッションが 1 件も見つからない" in captured.err
+    assert str(tmp_path) in captured.err
+
+
+def test_cmd_search_warns_when_archive_has_no_sessions(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(recall, "PROJECTS_DIR", tmp_path)
+    args = argparse.Namespace(query="whatever", project=None, days=None, max=20)
+    recall.cmd_search(args)
+    captured = capsys.readouterr()
+    assert "マッチなし" in captured.out
+    assert "セッションが 1 件も見つからない" in captured.err
+    assert str(tmp_path) in captured.err
+
+
+def test_cmd_show_warns_when_archive_has_no_sessions(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(recall, "PROJECTS_DIR", tmp_path)
+    args = argparse.Namespace(session_prefix="abcd1234", grep=None, head=None, tail=None)
+    with pytest.raises(SystemExit):
+        recall.cmd_show(args)
+    captured = capsys.readouterr()
+    assert "セッションが 1 件も見つからない" in captured.err
+    assert str(tmp_path) in captured.err
+    assert "セッションが見つからない: abcd1234" in captured.err
+
+
+def test_cmd_list_no_warn_when_filter_empty_but_archive_has_sessions(fake_projects, capsys):
+    """フィルタが単に一致しないだけ (アーカイブ自体は非空) では新しい警告は出ない ──
+    誤報で無視を育てないため。"""
+    args = argparse.Namespace(project="does-not-exist-xyz")
+    recall.cmd_list(args)
+    captured = capsys.readouterr()
+    assert "該当セッションなし" in captured.out
+    assert captured.err == ""
 
 
 # ---------- origin ----------
@@ -564,6 +646,32 @@ def test_check_anchor_missing_file_warns(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "cccc3333@2026-04-01 10:00 in node_anchor.md -- セッションが存在しない" in out
     assert "ERROR" not in out
+
+
+def test_check_anchor_all_sessions_missing_warns_on_stderr(tmp_path, monkeypatch, capsys):
+    """アーカイブに transcript が1件も無い状態で系譜アンカー検証をすると、dead link の
+    WARN に加えて「探索場所を取り違えていないか」を stderr に WARN する (実測の
+    「dead=46 誤報」事故の再発防止)。stdout 側の WARN dead link 自体は変えない。"""
+    _setup_anchor_case(
+        tmp_path, monkeypatch, [],  # セッション無し
+        "本文中のアンカー cccc3333@2026-04-01 10:00 (該当セッション無し)。")
+    args = argparse.Namespace(quiet=False)
+    recall.cmd_check(args)  # WARN のみ -> exit しない
+    captured = capsys.readouterr()
+    assert "cccc3333@2026-04-01 10:00 in node_anchor.md -- セッションが存在しない" \
+        in captured.out
+    assert "セッションが 1 件も見つからない" in captured.err
+    assert str(tmp_path) in captured.err
+
+
+def test_check_anchor_no_stray_warning_when_archive_has_sessions(fake_lineage, capsys):
+    """アーカイブに現にセッションがある通常の dead anchor (node_deadanchor) では、
+    新しい「探索場所」警告は誤報しない。"""
+    args = argparse.Namespace(quiet=False)
+    recall.cmd_check(args)
+    captured = capsys.readouterr()
+    assert "ffeeddcc@2026-05-05 05:05 in node_deadanchor.md" in captured.out
+    assert "セッションが 1 件も見つからない" not in captured.err
 
 
 def test_get_cached_minutes_invalidates_on_size_mtime_change(tmp_path):
