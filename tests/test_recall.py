@@ -1256,3 +1256,14 @@ def test_sample_demo_lineage():
 def test_sample_demo_suggest():
     result = _run_recall("suggest")
     assert result.returncode == 0
+
+def test_iter_sessions_ignores_dotfile_jsonl_in_parent(tmp_path, monkeypatch):
+    """実測 (2026-08-20): 親 dir 直下の .recall-usage.jsonl（隠しファイル）をセッションと誤認すると、
+    親が単一プロジェクト扱いになり本物のセッションが全滅する。隠しは direct 判定の対象にしない。"""
+    proj = tmp_path / "projects"
+    (proj / "demo").mkdir(parents=True)
+    (proj / "demo" / "aaaa1111-0000-0000-0000-000000000000.jsonl").write_text("{}", encoding="utf-8")
+    (proj / ".recall-usage.jsonl").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(recall, "PROJECTS_DIR", proj)
+    got = [p.name for p in recall.iter_sessions(None)]
+    assert got == ["aaaa1111-0000-0000-0000-000000000000.jsonl"], got

@@ -199,7 +199,10 @@ def iter_sessions(project_filter=None):
     (直下に *.jsonl が無ければ今まで通りサブディレクトリを走査する)。"""
     if not PROJECTS_DIR.exists():
         return
-    direct = sorted(PROJECTS_DIR.glob("*.jsonl"))
+    # ★ 隠しファイルは除く: 実測 (2026-08-20) で親 dir 直下の .recall-usage.jsonl（想起ログ）を
+    #   「セッション」と誤認し、親を単一プロジェクト扱いして本物のセッションを全滅させた。
+    #   セッション transcript が . 始まりになることは無い。
+    direct = sorted(p for p in PROJECTS_DIR.glob("*.jsonl") if not p.name.startswith("."))
     if direct:
         if project_filter and project_filter.lower() not in PROJECTS_DIR.name.lower():
             return
