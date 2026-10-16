@@ -23,7 +23,28 @@
       "mcp__github__list_issues",
       "mcp__github__list_pull_requests",
       "mcp__github__actions_list",
-      "mcp__github__actions_get"
+      "mcp__github__actions_get",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)",
+      "Bash(mkdir *)",
+      "Bash(chmod +x *)",
+      "Bash(python3 -m pip install pytest)",
+      "mcp__github__create_pull_request",
+      "mcp__github__update_pull_request",
+      "mcp__github__merge_pull_request",
+      "mcp__github__add_issue_comment",
+      "mcp__claude-code-remote__subscribe_pr_activity",
+      "mcp__claude-code-remote__unsubscribe_pr_activity",
+      "mcp__claude-code-remote__send_later"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)"
     ]
   }
 }
