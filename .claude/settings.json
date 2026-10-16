@@ -14,5 +14,16 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__github__pull_request_read",
+      "mcp__claude-code-remote__read_documentation",
+      "Bash(python3 -m pytest -q)",
+      "mcp__github__list_issues",
+      "mcp__github__list_pull_requests",
+      "mcp__github__actions_list",
+      "mcp__github__actions_get"
+    ]
   }
 }
