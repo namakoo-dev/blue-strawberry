@@ -128,6 +128,24 @@ Run `python recall.py <command> --help` for the full flag list on any subcommand
 - **Corrupt lines don't stop a scan.** A truncated line from a crashed session is skipped, not fatal.
 - **The memory layer never guesses at meaning.** Frontmatter parsing, link extraction, and lineage parsing are all regex-based pattern matches against one specific hand-written format, not a general Markdown/YAML interpreter — deliberately narrow so behavior stays predictable.
 
+## SessionStart hook (optional)
+
+`session_start_recall.sh` is a [Claude Code SessionStart hook](https://code.claude.com/docs/en/hooks) that injects the `MEMORY.md` index of every project under `archive/` into the start of a session, so an agent sees its archived notes without running `recall.py` by hand. For each project it also runs `check` with an explicit `--memory-dir` and includes the resulting `graph:` line, so integrity problems show up in the injected context rather than being hidden behind an exit code (`check` exits 0 even when it warns). It only reads files; if `archive/` is missing or has no `MEMORY.md`, it prints `{}` and exits 0.
+
+This repository registers it in `.claude/settings.json`, so it runs whenever you open blue-strawberry itself in Claude Code. To use it from another repository, add this to that repository's `.claude/settings.json` or to `~/.claude/settings.json`, and point `BLUE_STRAWBERRY_DIR` at your clone (the default is the script's own directory):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "bash /path/to/blue-strawberry/session_start_recall.sh" } ] }
+    ]
+  }
+}
+```
+
+`archive/` holds only `memory/` notes, not transcripts, so a non-zero `dead` count in the `graph:` line usually means a lineage anchor points at a session that isn't on this machine. It doesn't mean the note is corrupt.
+
 ## Tests
 
 `tests/test_recall.py` covers the transcript parsing, all nine subcommands, the memory graph checks, path auto-detection, and the bundled sample data end-to-end — no real Claude Code data or network access required. CI runs it on Ubuntu and Windows via GitHub Actions (`.github/workflows/ci.yml`).

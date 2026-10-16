@@ -15,29 +15,35 @@ if [ ! -d "$ARCHIVE" ]; then
   exit 0
 fi
 
-OUT=$(python3 "$DIR/recall.py" --projects-dir "$ARCHIVE" check 2>&1)
-CHECK_EXIT=$?
-
-# 各プロジェクトの MEMORY.md 索引を集めて要約として渡す(生の全文は長すぎるので索引だけ)
+# 各プロジェクトの MEMORY.md 索引と、そのプロジェクト単位の整合性サマリ(check の graph: 行)を
+# 集めて渡す。生の全文は長すぎるので索引だけ。check はプロジェクトごとに --memory-dir を明示する
+# (archive/ 直下にプロジェクトが複数あると memory の自動検出が「未設定」扱いになるため)。
+# check は WARN があっても exit 0 なので、終了コードではなく graph: 行そのものを載せる。
 SUMMARY=""
 while IFS= read -r -d '' f; do
-  proj=$(basename "$(dirname "$(dirname "$f")")")
+  mem=$(dirname "$f")
+  projdir=$(dirname "$mem")
+  proj=$(basename "$projdir")
+  graph=$(python3 "$DIR/recall.py" --projects-dir "$projdir" --memory-dir "$mem" check 2>/dev/null \
+          | grep '^graph:' || echo 'graph: (check 失敗)')
   SUMMARY="${SUMMARY}### ${proj}
+${graph}
 $(cat "$f")
 
 "
-done < <(find "$ARCHIVE" -path "*/memory/MEMORY.md" -print0 2>/dev/null)
+done < <(find "$ARCHIVE" -path "*/memory/MEMORY.md" -print0 2>/dev/null | sort -z)
 
 if [ -z "$SUMMARY" ]; then
   echo '{}'
   exit 0
 fi
 
-python3 - "$SUMMARY" "$CHECK_EXIT" <<'PY'
+python3 - "$SUMMARY" <<'PY'
 import json, sys
-summary, check_exit = sys.argv[1], sys.argv[2]
+summary = sys.argv[1]
 ctx = ("[blue-strawberry archive からの自動読み込み]\n"
-       f"(整合性チェック exit={check_exit})\n\n" + summary)
+       "(archive/ には transcript を置かないので、graph: 行の dead は系譜アンカーの"
+       "参照先セッションが手元に無いことを示すだけで、記憶の破損ではない)\n\n" + summary)
 print(json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "SessionStart",
